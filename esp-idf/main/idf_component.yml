@@ -1,0 +1,20 @@
+dependencies:
+  idf:
+    version: ">=5.5"
+
+  # Platform straddles (spangap-core/-net/-web/-lcd + the remote-access services)
+  # and the viewer are NOT listed here. They're declared in straddle.yaml's
+  # `additional_installs:` and staged at build time by `spangap build` into
+  # staging/components/<short>/, picked up via EXTRA_COMPONENT_DIRS. Listing them
+  # here too would double-stage them under the manager's namespaced
+  # `managed_components/<org>__<repo>/` form, causing duplicate-symbol link errors.
+  #
+  # The component manager doesn't recurse into locally-staged components'
+  # dependencies, so THIS buildable has to surface every third-party managed dep
+  # a staged straddle (or `--with`'d board) transitively uses:
+  #   - esp_lcd_touch_gt911 → the hw-tdeck board's on-device-UI input HAL. Board-
+  #     specific; a generic (no-board) build fetches it but never links it. Until
+  #     the build surfaces a --with'd board's managed deps automatically, it lives
+  #     here.
+  espressif/esp_lcd_touch_gt911:
+    version: "^1.1"

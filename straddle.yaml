@@ -1,0 +1,39 @@
+# spangap/demo — the buildable that assembles a reference Spangap device image:
+# the full non-mesh platform (IP + web + the remote-access services + on-device
+# LCD UI) plus the viewer. It shows what Spangap gives you out of the box, and is
+# the image published by spangap/spangap-builds.
+#
+# It carries NO firmware or board HAL of its own. It ships the Quasar browser SPA
+# (web-interface/), the LittleFS data image (data/) and the LCD launcher icons
+# (assets/lcd-icons/); its main/ is just the build-generated app_main + start/
+# init dispatchers.
+#
+# Build it WITH a board straddle — the board supplies the pin maps, bring-up
+# hooks, and hardware kconfig (flash size, PSRAM mode, display):
+#   spangap build spangap/demo --with spangap/hw-tdeck   # T-Deck Plus (screen → LCD UI)
+#   spangap build spangap/demo                           # generic ESP32-S3, headless
+schema_version: 1
+name: spangap/demo
+prefix: demo
+version: 0.0.0
+# Firmware identity (immutable; exposed read-only to the browser as fw.*).
+# demo is the built straddle here, so it wins these over every dep.
+stub: demo
+display_name: Spangap Demo
+banner: A Spangap device, ready to build on!
+default_hostname: spangap
+firmware: esp-idf
+browser: web-interface
+platforms: [idf]
+# The non-mesh platform, all default-on and droppable with `spangap build
+# --without <name>` (the cascade takes hard dependents with it). Notes:
+#   - The remote-access services (ACME / DuckDNS / UPnP / WireGuard / sshd) are
+#     NOT listed here — spangap-net additional-installs them, so requiring net is
+#     enough.
+#   - The on-device LCD UI is NOT listed here either — it rides on the board: a
+#     board with a screen (hw-tdeck) additional-installs spangap-lcd itself, so
+#     a screenless board builds headless with no extra flags.
+additional_installs:
+  - spangap/spangap-net
+  - spangap/spangap-web
+  - spangap/viewer
