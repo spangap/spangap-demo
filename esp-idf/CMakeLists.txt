@@ -64,5 +64,5 @@ spangap_create_factory_image(DATA_DIR "${CMAKE_SOURCE_DIR}/../data")
 # only exists when that straddle is staged. A --no-lcd build skips the
 # rasterizer entirely (there are no LCD icons to ship without the launcher).
 if(COMMAND spangap_lcd_icons)
-    spangap_lcd_icons(SRC_DIR "${CMAKE_SOURCE_DIR}/../assets/lcd-icons")
+    spangap_lcd_icons()
 endif()
