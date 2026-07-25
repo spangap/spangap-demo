@@ -12,7 +12,7 @@ dependencies:
   # The component manager doesn't recurse into locally-staged components'
   # dependencies, so THIS buildable has to surface every third-party managed dep
   # a staged straddle (or `--with`'d board) transitively uses:
-  #   - esp_lcd_touch_gt911 → the hw-tdeck board's on-device-UI input HAL. Board-
+  #   - esp_lcd_touch_gt911 → the hw-lilygo-tdeck board's on-device-UI input HAL. Board-
   #     specific; a generic (no-board) build fetches it but never links it. Until
   #     the build surfaces a --with'd board's managed deps automatically, it lives
   #     here.

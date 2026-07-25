@@ -10,7 +10,7 @@
 #
 # Build it WITH a board straddle — the board supplies the pin maps, bring-up
 # hooks, and hardware kconfig (flash size, PSRAM mode, display):
-#   spangap build spangap/demo --with spangap/hw-tdeck   # T-Deck Plus (screen → LCD UI)
+#   spangap build spangap/demo --with spangap/hw-lilygo-tdeck   # T-Deck Plus (screen → LCD UI)
 #   spangap build spangap/demo                           # generic ESP32-S3, headless
 schema_version: 1
 name: spangap/demo
@@ -31,7 +31,7 @@ platforms: [idf]
 #     NOT listed here — spangap-net additional-installs them, so requiring net is
 #     enough.
 #   - The on-device LCD UI is NOT listed here either — it rides on the board: a
-#     board with a screen (hw-tdeck) additional-installs spangap-lcd itself, so
+#     board with a screen (hw-lilygo-tdeck) additional-installs spangap-lcd itself, so
 #     a screenless board builds headless with no extra flags.
 additional_installs:
   - spangap/spangap-net
