@@ -12,9 +12,12 @@ dependencies:
   # The component manager doesn't recurse into locally-staged components'
   # dependencies, so THIS buildable has to surface every third-party managed dep
   # a staged straddle (or `--with`'d board) transitively uses:
-  #   - esp_lcd_touch_gt911 → the hw-lilygo-tdeck board's on-device-UI input HAL. Board-
-  #     specific; a generic (no-board) build fetches it but never links it. Until
-  #     the build surfaces a --with'd board's managed deps automatically, it lives
-  #     here.
-  espressif/esp_lcd_touch_gt911:
-    version: "^1.1"
+  #   - esp_tinyusb         → spangap-core's `usb cdc` console transport, which
+  #     puts the console and a second claimable port on a TinyUSB composite device.
+  # (The touch driver components — esp_lcd_touch_ft5x06 / _gt911 — are pinned by
+  # spangap-lcd's own idf_component.yml alongside its ILI9341 driver, so boards
+  # need nothing surfaced here for touch.)
+  espressif/esp_tinyusb:
+    version: "^2.2"
+    rules:
+      - if: "target != linux"

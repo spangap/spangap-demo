@@ -1,11 +1,13 @@
 import { configure } from 'quasar/wrappers';
 import { readFileSync } from 'node:fs';
+import { linkedDepsHmr } from 'spangap-browser/vite/linked-deps-hmr';
 
 // The browser-half straddles are pulled in as `file:` deps and npm-linked. They
 // ARE the code under development, so Vite must NOT pre-bundle them — a stale
 // optimized chunk is why an edit to e.g. spangap-browser wouldn't show up under
 // `spangap dev` until the cache was blown away. Excluding them from optimizeDeps
-// serves them as live source (proper HMR); their real npm deps still optimize.
+// serves them as live source; their real npm deps still optimize. The other half
+// of that is the linkedDepsHmr plugin below, which is what watches them.
 const pkg = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
 ) as { dependencies?: Record<string, string> };
@@ -21,6 +23,14 @@ export default configure(() => {
     build: {
       target: { browser: ['es2022'] },
       vueRouterMode: 'history',
+      // deploy.sh builds into the firmware build's own dir, one per target.
+      ...(process.env.SPANGAP_WEB_DIST ? { distDir: process.env.SPANGAP_WEB_DIST } : {}),
+      vitePlugins: [
+        // Watches the straddles where they really live, so an edit to one shows
+        // up in the browser straight away — see the plugin for why Vite's own
+        // watcher can't be made to.
+        [linkedDepsHmr, {}],
+      ],
       extendViteConf(viteConf) {
         // spangap-browser is a file: dep — vite must resolve its peers
         // (vue, pinia, quasar, vue-router) from this consumer's node_modules,
@@ -57,9 +67,10 @@ export default configure(() => {
       // Reverse-proxy the device so the dev server is same-origin with it: the
       // session cookie, /auth, and the /webrtc signaling all behave exactly as
       // when the SPA is served from the device. `spangap dev` passes the active
-      // device address in SPANGAP_DEVICE; without it (a bare `quasar dev`) there's
-      // no target and these routes 404 locally. secure:false accepts the device's
-      // self-signed TLS. (The WebDAV file editor talks to arbitrary /<path> URLs
+      // device address in SPANGAP_DEVICE — a bare host (its own https port), or
+      // host:port when it reaches the device through the relay that run owns.
+      // Without it (a bare `quasar dev`) there's no target and these routes 404
+      // locally. secure:false accepts the device's self-signed TLS. (The WebDAV file editor talks to arbitrary /<path> URLs
       // that can't be prefix-proxied without shadowing Vite's assets, so that one
       // feature is unavailable under `spangap dev` — everything else works.)
       proxy: (() => {
