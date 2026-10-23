@@ -2,7 +2,12 @@
   <q-layout v-if="authChecked" view="hHh Lpr fFf" class="main-layout">
     <q-header class="bg-dark text-white no-shadow app-header">
       <q-toolbar class="topbar" style="min-height: 38px">
-        <q-toolbar-title class="topbar-title">{{ progName }}</q-toolbar-title>
+        <q-toolbar-title class="topbar-title">{{ displayTitle }}</q-toolbar-title>
+        <!-- Straddle-owned status indicators self-mount here (left of the power
+             button) through the top-bar icon registry — a staged straddle
+             registers its icon from its register* module, so this layout never
+             imports straddle packages and never needs editing as the set changes. -->
+        <TopbarIcons />
         <!-- Power button → Log out. Inline SVG (the SPA uses Quasar's
              svg-material-icons set, so string icon names don't render as a
              webfont). Shown only when auth is active. -->
@@ -36,12 +41,13 @@
           title="System Log"
           @update:visible="v => logVisible = v"
         />
-        <ViewerWindow
-          :visible="viewerWebVisible"
-          :focus-token="viewerWebFocus"
-          title="Viewer"
-          @update:visible="v => viewerWebVisible = v"
-        />
+        <!-- Every straddle-owned window (viewer, lcdmirror,
+             …) self-mounts through the window-mount registry — a staged
+             straddle registers its window component from its register* module
+             in straddles.gen.ts, so this layout never imports straddle
+             packages and never needs editing when the staged set changes.
+             Only spangap-web's own framework windows are mounted here. -->
+        <StraddleWindows />
         <SettingsWindow
           :visible="settingsVisible"
           :focus-token="settingsFocus"
@@ -51,6 +57,19 @@
       </UsableArea>
     </q-page-container>
     <ConnectionOverlay />
+    <!-- Single-session blocker: shown when the device reports another
+         session holds the slot (BUSY) or when this session was evicted by a
+         takeover (kicked). Teleported to <body> so it covers the whole
+         viewport, header included. -->
+    <Teleport to="body">
+      <div v-if="sessionBlocked" class="session-blocker" role="alertdialog">
+        <div class="session-blocker-box">
+          <div class="session-blocker-title">{{ blockerTitle }}</div>
+          <div class="session-blocker-body">{{ blockerBody }}</div>
+          <button class="session-blocker-btn" @click="onSessionAction">{{ blockerAction }}</button>
+        </div>
+      </div>
+    </Teleport>
   </q-layout>
 </template>
 
@@ -67,9 +86,9 @@ import Dock from 'spangap-browser/components/Dock.vue'
 import SettingsWindow from 'spangap-browser/components/SettingsWindow.vue'
 import ConnectionOverlay from 'spangap-browser/components/ConnectionOverlay.vue'
 import { settingsVisible, settingsFocus } from 'spangap-browser/modules/advanced'
-import ViewerWindow from 'viewer/panels/ViewerWindow.vue'
+import StraddleWindows from 'spangap-browser/components/StraddleWindows.vue'
+import TopbarIcons from 'spangap-browser/components/TopbarIcons.vue'
 import { cliVisible, logVisible, cliFocus, logFocus } from 'spangap-browser/modules/advanced'
-import { viewerWebVisible, viewerWebFocus } from 'viewer/modules/viewer'
 import { startLogStream, installConsoleHooks } from 'spangap-browser/stores/log'
 
 const router = useRouter()
@@ -82,10 +101,10 @@ async function onLogout() {
   window.location.reload()   /* drop all in-memory session/UI state, re-run auth */
 }
 
-/* The actual browser window/tab title (document.title): "<program> -
- * <hostname>", collapsed to just the program name when the two are
- * case-insensitively equal (e.g. Spangap / spangap). Mirrors MenuBar's
- * progName fallback chain. */
+
+/* progName mirrors MenuBar's fallback chain; hostName is the device's configured
+ * hostname. The host segment is dropped when it is empty or case-insensitively
+ * equal to the program name (e.g. spangap / Spangap). */
 const progName = computed(() => {
   const p = device.get('s.sys.progname')
   if (typeof p === 'string' && p.trim()) return p.trim()
@@ -97,15 +116,64 @@ const hostName = computed(() => {
   const h = device.get('s.net.hostname')
   return typeof h === 'string' ? h.trim() : ''
 })
-watchEffect(() => {
-  const prog = progName.value, host = hostName.value
-  document.title = host && host.toLowerCase() !== prog.toLowerCase()
-    ? `${prog} - ${host}` : prog
+const showHost = computed(() => {
+  const host = hostName.value
+  return !!host && host.toLowerCase() !== progName.value.toLowerCase()
 })
+/* Top-bar header: "<hostname> - <program>". */
+const displayTitle = computed(() =>
+  showHost.value ? `${hostName.value} - ${progName.value}` : progName.value)
+/* Browser tab: "<hostname> - Web UI - <program>", naming the role between them. */
+const tabTitle = computed(() =>
+  showHost.value ? `${hostName.value} - Web UI - ${progName.value}` : `Web UI - ${progName.value}`)
+watchEffect(() => { document.title = tabTitle.value })
 
+/* ── Single-session state (BUSY / kicked) ── */
 const session = getSession()
 const sessionState = ref<SessionState>(session.state)
 let sessionUnsub: (() => void) | null = null
+
+/* A reconnect (page reload, dropped link) can briefly land on BUSY: the
+ * device hasn't yet noticed our previous signalling WS closed and rejects
+ * the new connect as a second session. That clears itself within a beat as
+ * the stale slot is reclaimed. Only surface the blocker if we're STILL busy
+ * after this settle window, so a transient reject never flashes the overlay.
+ * A takeover ('kicked') is deliberate — no race — so it shows immediately. */
+const BUSY_SETTLE_MS = 1200
+const busyShown = ref(false)
+let busyTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearBusyTimer() {
+  if (busyTimer) { clearTimeout(busyTimer); busyTimer = null }
+}
+
+function onSessionState(s: SessionState) {
+  sessionState.value = s
+  if (s === 'busy') {
+    if (!busyShown.value && !busyTimer) {
+      busyTimer = setTimeout(() => { busyTimer = null; busyShown.value = true }, BUSY_SETTLE_MS)
+    }
+  } else {
+    clearBusyTimer()
+    busyShown.value = false
+  }
+}
+
+const sessionBlocked = computed(() => busyShown.value || sessionState.value === 'kicked')
+const blockerTitle = computed(() =>
+  sessionState.value === 'busy' ? 'Device busy' : 'Session ended')
+const blockerBody = computed(() => sessionState.value === 'busy'
+  ? 'Another session is active. Taking over will end the other session.'
+  : 'Another session took over this device.')
+const blockerAction = computed(() =>
+  sessionState.value === 'busy' ? 'Take over' : 'Resume')
+
+function onSessionAction() {
+  /* Busy: force-evict the other session. Kicked: retry without force
+     (may land back on BUSY if the new occupant is still there). */
+  const force = sessionState.value === 'busy'
+  session.connect({ force })
+}
 
 onMounted(async () => {
   try {
@@ -116,7 +184,7 @@ onMounted(async () => {
     authActive.value = auth.enabled
   } catch { /* proceed */ }
   authChecked.value = true
-  sessionUnsub = session.onStateChange((s) => { sessionState.value = s })
+  sessionUnsub = session.onStateChange(onSessionState)
   device.connect()
   startLogStream()
   installConsoleHooks()
@@ -124,6 +192,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (sessionUnsub) { sessionUnsub(); sessionUnsub = null }
+  clearBusyTimer()
 })
 </script>
 
@@ -154,4 +223,49 @@ onUnmounted(() => {
     rgba(255, 255, 255, 0) 42%
   );
 }
+.session-blocker {
+  position: fixed;
+  inset: 0;
+  /* Above ConnectionOverlay (100000) — the actionable dialog wins when both
+     a link-down scrim and a takeover/busy state are in play. */
+  z-index: 100001;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.session-blocker-box {
+  background: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 24px 28px;
+  max-width: 420px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  color: #fff;
+}
+.session-blocker-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+.session-blocker-body {
+  font-size: 14px;
+  line-height: 1.4;
+  opacity: 0.85;
+  margin-bottom: 20px;
+}
+.session-blocker-btn {
+  background: #2a6fc4;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 22px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.session-blocker-btn:hover { background: #3b82d9; }
 </style>
