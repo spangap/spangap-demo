@@ -1,19 +1,18 @@
-# spangap/demo — the buildable that assembles a reference Spangap device image:
-# the full non-mesh platform (IP + web + the remote-access services + on-device
-# LCD UI) plus the viewer. It shows what Spangap gives you out of the box, and is
-# the image published by spangap/spangap-builds.
+# spangap/spangap-demo — the buildable that assembles a reference Spangap device
+# image: the full non-mesh platform (IP + web + the remote-access services +
+# on-device LCD UI) plus the viewer. It shows what Spangap gives you out of the
+# box.
 #
 # It carries NO firmware or board HAL of its own. It ships the Quasar browser SPA
-# (web-interface/), the LittleFS data image (data/) and the LCD launcher icons
-# (assets/lcd-icons/); its main/ is just the build-generated app_main + start/
-# init dispatchers.
+# (web-interface/) and the /fixed data (data/, esp-idf/data/); its main/ is just
+# the build-generated app_main + start/init dispatchers.
 #
 # Build it WITH a board straddle — the board supplies the pin maps, bring-up
 # hooks, and hardware kconfig (flash size, PSRAM mode, display):
-#   spangap build spangap/demo --with spangap/hw-lilygo-tdeck   # T-Deck Plus (screen → LCD UI)
-#   spangap build spangap/demo                           # generic ESP32-S3, headless
+#   spangap build spangap/spangap-demo --with spangap/hw-lilygo-tdeck   # T-Deck Plus (screen → LCD UI)
+#   spangap build spangap/spangap-demo                           # generic ESP32-S3, headless
 schema_version: 1
-name: spangap/demo
+name: spangap/spangap-demo
 prefix: demo
 version: 0.0.0
 # Firmware identity (immutable; exposed read-only to the browser as fw.*).
@@ -22,6 +21,9 @@ stub: demo
 display_name: Spangap Demo
 banner: A Spangap device, ready to build on!
 default_hostname: spangap
+# The project these images are published under: its catalogues live in the
+# workspace's spangap-builds/, which a local flashmon serves as /builds.
+project: Spangap
 firmware: esp-idf
 browser: web-interface
 platforms: [idf]
